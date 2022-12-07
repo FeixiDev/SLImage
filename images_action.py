@@ -1,7 +1,9 @@
+import os
 import sys
 import re
 import docker_operator
 import utils
+from pathlib import Path
 
 
 class Images(object):
@@ -42,6 +44,26 @@ class Images(object):
     def load_images(self):
         local_path = sys.path[0] + '/save_images'
         remote_path = 'save_images'
-        self.controller_node.upload(local_path, remote_path)
-if __name__ == '__main__':
-    Images().save_images()
+        file_path = Path(remote_path)
+        try:
+            print("Transferring images to nodes")
+            self.controller_node.upload(local_path, remote_path)
+        except:
+            print("Images transfer failed")
+        try:
+            file_path.resolve()
+        except FileNotFoundError:
+            print("save_images does not exist")
+
+        images_name = os.listdir(sys.path[0]+'/save_images')
+        print("Start loading the images")
+        for i in range(len(images_name)):
+            self.docker_cmds.load_images(images_name[i], self.ssh_obj)
+        name_result = self.docker_cmds.check_images_name(self.ssh_obj)
+        if name_result == images_name:
+            print('All images have loaded')
+            utils.exec_cmd("rm save_images", self.ssh_obj)
+        else:
+            print(sys.path[0]+"/save_images")
+
+
