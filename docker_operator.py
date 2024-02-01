@@ -15,8 +15,10 @@ class Docker(object):
         result = utils.exec_cmd(cmd, ssh_conn)
         return result
 
-    def save_images(self, id, file_path, name, tag, author='', ssh_conn=None):
-        if author == '':
+    def save_images(self, id, file_path, name, tag=None, author='', ssh_conn=None):
+        if tag is None:
+            cmd = f'docker save {id} -o {file_path}/{name}.tar'
+        elif author == '':
             cmd = f'docker save {id} -o {file_path}/{name}:{tag}.tar'
         else:
             cmd = f'docker save {id} -o {file_path}/{author}:{name}:{tag}.tar'
