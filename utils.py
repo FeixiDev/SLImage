@@ -1,3 +1,4 @@
+import atexit
 import paramiko
 import subprocess
 import logging
@@ -30,8 +31,10 @@ def exec_cmd(cmd, conn=None):
     result = result.decode() if isinstance(result, bytes) else result
     log_data = f'{get_host_ip()} - {cmd} - {result}'
     Log().logger.info(log_data)
-    if result:
-        result = result['rt'].rstrip('\n')
+    if isinstance(result, dict):
+        result = result.get('rt', '').rstrip('\n')
+    else:
+        print(f"Debug: Result is not a dictionary. Type: {type(result)}")
     return result
 
 def save_imageflile(operate, image_list=None):
@@ -173,11 +176,14 @@ class ConfFile(object):
         读yaml文件
         """
         try:
-            with open(self.file_path, 'r', encoding='utf-8') as f:
-                yaml_file = yaml.load(f, Loader=yaml.FullLoader)
-            return yaml_file
-        except FileNotFoundError:
-            print("File not found")
+            if self.file_path and os.path.isfile(self.file_path):
+                with open(self.file_path, 'r', encoding='utf-8') as f:
+                    yaml_file = yaml.load(f, Loader=yaml.FullLoader)
+                return yaml_file
+            else:
+                return None
+        # except FileNotFoundError:
+        #     print("File not found")
         except TypeError:
             print("Error in the type of file .")
 
@@ -195,23 +201,37 @@ class ConfFile(object):
 
 
 class Log(object):
-    def __init__(self):
-        pass
+    _instance = None
 
     def __new__(cls, *args, **kwargs):
-        if not hasattr(cls, '_instance'):
-            Log._instance = super().__new__(cls)
-            Log._instance.logger = logging.getLogger()
-            Log._instance.logger.setLevel(logging.INFO)
-            Log.set_handler(Log._instance.logger)
-        return Log._instance
+        if not cls._instance:
+            cls._instance = super().__new__(cls)
+            cls._instance.logger = logging.getLogger()
+            cls._instance.logger.setLevel(logging.INFO)
+            cls._instance.set_handler()
+            atexit.register(cls._instance.close_handler)  # 注册关闭处理程序的方法
+        return cls._instance
 
-    @staticmethod
-    def set_handler(logger):
-        now_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        file_name = str(now_time) + '.log'
-        fh = logging.FileHandler(file_name, mode='a')
-        fh.setLevel(logging.DEBUG)
-        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
+    def set_handler(self):
+        now_date = datetime.datetime.now().strftime('%Y-%m-%d')
+        log_file_name = f"SLImage_{now_date}.log"
+    
+        # Check if the log file already exists
+        if not hasattr(self, 'log_date') or now_date != self.log_date:
+            self.log_date = now_date
+            log_file_name = f"SLImage_{now_date}.log"
+            fh = logging.FileHandler(log_file_name, mode='a')
+            fh.setLevel(logging.DEBUG)
+            formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", datefmt='%Y-%m-%d %H:%M:%S')
+            fh.setFormatter(formatter)
+            self.logger.addHandler(fh)
+
+    def close_handler(self):
+        handlers = self.logger.handlers[:]
+        for handler in handlers:
+            if isinstance(handler, logging.FileHandler):
+                # 添加分隔线到日志的最后一行
+                handler.stream.write('\n' + '-' * 50 + ' End of Log ' + '-' * 50 + '\n')
+                handler.flush()
+                handler.close()
+                self.logger.removeHandler(handler)
